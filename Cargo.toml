@@ -1,5 +1,5 @@
 [package]
-name = "notepad"
+name = "ironpad"
 version = "0.1.0"
 edition = "2024"
 
@@ -10,10 +10,12 @@ eframe = { version = "0.31", default-features = false, features = [
     "accesskit",
 ] }
 rfd = "0.15"
+syntect = { version = "5.3.0", default-features = false, features = ["default-fancy", "default-syntaxes", "default-themes", "dump-load"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_System_LibraryLoader",
     "Win32_UI_Controls",
