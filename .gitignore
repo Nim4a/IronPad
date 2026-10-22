@@ -2,3 +2,4 @@
 # machine-specific linker config (hardcoded Z: paths)
 .cargo/config.toml
 
+~IronPad-Setup.DDF
