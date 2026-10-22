@@ -1,0 +1,8 @@
+# Windows without MSVC: rustc's own rust-lld + mingw runtime/import libs.
+# Adjust the two paths to your machine.
+[build]
+rustflags = [
+    "-C", "linker=rust-lld",
+    "-C", "link-arg=-L<C:/Users/you/.rustup/toolchains/stable-x86_64-pc-windows-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/self-contained",
+    "-C", "link-arg=-L<C:/tools/w64devkit/lib",
+]
