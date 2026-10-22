@@ -12,10 +12,18 @@ fn main() -> eframe::Result<()> {
             .with_min_inner_size([480.0, 320.0]),
         ..Default::default()
     };
+    // `notepad.exe path.txt` opens that file at startup.
+    let startup_file = std::env::args().nth(1).map(PathBuf::from);
     eframe::run_native(
         "Notepad",
         options,
-        Box::new(|cc| Ok(Box::new(Notepad::new(cc)))),
+        Box::new(move |cc| {
+            let mut app = Notepad::new(cc);
+            if let Some(path) = startup_file {
+                app.load(path);
+            }
+            Ok(Box::new(app))
+        }),
     )
 }
 
@@ -32,6 +40,7 @@ struct Notepad {
     pending: Option<Action>,
     error: Option<String>,
     last_title: String,
+    themed: bool,
 }
 
 impl Notepad {
@@ -45,6 +54,19 @@ impl Notepad {
             pending: None,
             error: None,
             last_title: String::new(),
+            themed: false,
+        }
+    }
+
+    fn load(&mut self, path: PathBuf) {
+        match std::fs::read_to_string(&path) {
+            Ok(s) => {
+                self.text = s;
+                self.path = Some(path);
+                self.dirty = false;
+                self.error = None;
+            }
+            Err(e) => self.error = Some(format!("Open failed: {e}")),
         }
     }
 
@@ -58,15 +80,7 @@ impl Notepad {
             )
             .pick_file()
         {
-            match std::fs::read_to_string(&path) {
-                Ok(s) => {
-                    self.text = s;
-                    self.path = Some(path);
-                    self.dirty = false;
-                    self.error = None;
-                }
-                Err(e) => self.error = Some(format!("Open failed: {e}")),
-            }
+            self.load(path);
         }
     }
 
@@ -144,6 +158,11 @@ fn shortcut(ctx: &egui::Context, mods: egui::Modifiers, key: egui::Key) -> bool 
 
 impl eframe::App for Notepad {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // eframe applies the system theme after App::new, so force dark on frame 1.
+        if !self.themed {
+            ctx.set_visuals(egui::Visuals::dark());
+            self.themed = true;
+        }
         let ctrl = egui::Modifiers::COMMAND; // Ctrl on Windows
         let new_pressed = shortcut(ctx, ctrl, egui::Key::N);
         let open_pressed = shortcut(ctx, ctrl, egui::Key::O);

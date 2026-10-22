@@ -6,6 +6,8 @@
 
 A small, modern notepad for Windows written in Rust — [eframe](https://github.com/emilk/egui)/egui + glow, no webview, no runtime deps.
 
+![notepad-rs](docs/screenshot.png)
+
 ## Features
 
 - Dark theme, monospace editor
@@ -15,6 +17,7 @@ A small, modern notepad for Windows written in Rust — [eframe](https://github.
 - Warns before closing with unsaved changes
 - Persian/Arabic text renders correctly (Segoe UI fallback)
 - Single self-contained `.exe`, no installer
+- `notepad.exe path.txt` opens a file from the command line
 
 ## Download
 
