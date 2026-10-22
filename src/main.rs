@@ -52,7 +52,9 @@ impl Notepad {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter(
                 "Text files",
-                &["txt", "md", "rs", "toml", "json", "csv", "xml", "html", "css", "js", "log"],
+                &[
+                    "txt", "md", "rs", "toml", "json", "csv", "xml", "html", "css", "js", "log",
+                ],
             )
             .pick_file()
         {
@@ -200,17 +202,15 @@ impl eframe::App for Notepad {
         });
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                match &self.error {
-                    Some(err) => {
-                        ui.colored_label(egui::Color32::from_rgb(255, 90, 90), err);
-                    }
-                    None => {
-                        let lines = self.text.lines().count();
-                        let words = self.text.split_whitespace().count();
-                        let chars = self.text.chars().count();
-                        ui.label(format!("{lines} lines · {words} words · {chars} chars"));
-                    }
+            ui.horizontal(|ui| match &self.error {
+                Some(err) => {
+                    ui.colored_label(egui::Color32::from_rgb(255, 90, 90), err);
+                }
+                None => {
+                    let lines = self.text.lines().count();
+                    let words = self.text.split_whitespace().count();
+                    let chars = self.text.chars().count();
+                    ui.label(format!("{lines} lines · {words} words · {chars} chars"));
                 }
             });
         });
@@ -294,11 +294,7 @@ impl eframe::App for Notepad {
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Untitled".into());
-        let title = format!(
-            "{}{} - Notepad",
-            if self.dirty { "*" } else { "" },
-            name
-        );
+        let title = format!("{}{} - Notepad", if self.dirty { "*" } else { "" }, name);
         if title != self.last_title {
             self.last_title = title.clone();
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
