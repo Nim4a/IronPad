@@ -1,8 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+//! A modern notepad for Windows.
+//!
+//! The chrome (toolbar, status bar) is egui; the text area is the native
+//! Win32 EDIT control, because egui cannot shape or order RTL text
+//! (Persian/Arabic) — the OS control does shaping, bidi and IME for free.
+//!
+//! egui is pinned to 0.31 on purpose: 0.35+ (new panel API / vello renderer)
+//! wedges the OpenGL driver on this machine.
+
+mod win_edit;
+
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
 use eframe::egui;
+use win_edit::Edit;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
@@ -27,50 +40,70 @@ fn main() -> eframe::Result<()> {
     )
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum Action {
-    Close,
-    New,
-}
-
 struct Notepad {
     text: String,
     path: Option<PathBuf>,
     dirty: bool,
-    pending: Option<Action>,
     error: Option<String>,
     last_title: String,
     themed: bool,
+    edit: Option<Edit>,
+    pending_text: Option<String>,
+    parent_hwnd: Option<windows_sys::Win32::Foundation::HWND>,
 }
 
 impl Notepad {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+        cc.egui_ctx.set_theme(egui::ThemePreference::Dark);
         setup_fonts(&cc.egui_ctx);
         Self {
             text: String::new(),
             path: None,
             dirty: false,
-            pending: None,
             error: None,
             last_title: String::new(),
             themed: false,
+            edit: None,
+            pending_text: None,
+            parent_hwnd: None,
+        }
+    }
+
+    /// Put text into the native editor (next frame, once it exists).
+    fn set_editor_text(&mut self, text: String) {
+        self.text = text.clone();
+        match self.edit.as_ref() {
+            Some(edit) => edit.set_text(&text),
+            None => self.pending_text = Some(text),
+        }
+    }
+
+    /// Pull the latest text out of the native editor.
+    fn sync_from_editor(&mut self) {
+        if let Some(edit) = self.edit.as_ref() {
+            if edit.has_focus() {
+                let t = edit.get_text();
+                if t != self.text {
+                    self.text = t;
+                    self.dirty = true;
+                }
+            }
         }
     }
 
     fn load(&mut self, path: PathBuf) {
         match std::fs::read_to_string(&path) {
             Ok(s) => {
-                self.text = s;
                 self.path = Some(path);
                 self.dirty = false;
                 self.error = None;
+                self.set_editor_text(s);
             }
             Err(e) => self.error = Some(format!("Open failed: {e}")),
         }
     }
 
-    fn open(&mut self) {
+    fn open_file(&mut self) {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter(
                 "Text files",
@@ -84,7 +117,8 @@ impl Notepad {
         }
     }
 
-    fn save(&mut self, save_as: bool) -> bool {
+    fn save_file(&mut self, save_as: bool) -> bool {
+        self.sync_from_editor();
         let path = if save_as || self.path.is_none() {
             let name = self
                 .path
@@ -113,23 +147,26 @@ impl Notepad {
         }
     }
 
-    fn request(&mut self, ctx: &egui::Context, action: Action) {
-        if self.dirty {
-            self.pending = Some(action);
-        } else {
-            self.do_action(ctx, action);
-        }
+    fn new_file(&mut self) {
+        self.path = None;
+        self.dirty = false;
+        self.error = None;
+        self.set_editor_text(String::new());
     }
 
-    fn do_action(&mut self, ctx: &egui::Context, action: Action) {
-        match action {
-            Action::Close => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            Action::New => {
-                self.text.clear();
-                self.path = None;
+    /// Ask about unsaved changes. Returns true if we may continue.
+    fn confirm_discard(&mut self, parent: windows_sys::Win32::Foundation::HWND) -> bool {
+        self.sync_from_editor();
+        if !self.dirty {
+            return true;
+        }
+        match Edit::confirm_discard(parent) {
+            win_edit::Confirm::Save => self.save_file(false),
+            win_edit::Confirm::Discard => {
                 self.dirty = false;
-                self.error = None;
+                true
             }
+            win_edit::Confirm::Cancel => false,
         }
     }
 }
@@ -160,67 +197,93 @@ impl eframe::App for Notepad {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // eframe applies the system theme after App::new, so force dark on frame 1.
         if !self.themed {
-            ctx.set_visuals(egui::Visuals::dark());
+            ctx.set_theme(egui::ThemePreference::Dark);
+            ctx.request_repaint();
             self.themed = true;
         }
-        let ctrl = egui::Modifiers::COMMAND; // Ctrl on Windows
-        let new_pressed = shortcut(ctx, ctrl, egui::Key::N);
-        let open_pressed = shortcut(ctx, ctrl, egui::Key::O);
-        let save_pressed = shortcut(ctx, ctrl, egui::Key::S);
-        let save_as_pressed = shortcut(ctx, ctrl | egui::Modifiers::SHIFT, egui::Key::S);
+        // eframe does not expose the HWND in 0.31, so look it up ourselves.
+        if self.parent_hwnd.is_none() {
+            let hwnd = win_edit::find_main_window();
+            if !hwnd.is_null() {
+                self.parent_hwnd = Some(hwnd);
+            }
+        }
+        let parent = self.parent_hwnd.unwrap_or(std::ptr::null_mut());
 
-        // Intercept window close while dirty.
-        if ctx.input(|i| i.viewport().close_requested()) {
-            if self.dirty {
-                self.pending = Some(Action::Close);
-                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        if self.edit.is_none() && !parent.is_null() {
+            if let Some(edit) = Edit::new(parent) {
+                self.edit = Some(edit);
+                if let Some(t) = self.pending_text.take() {
+                    self.edit.as_ref().unwrap().set_text(&t);
+                }
             }
         }
 
-        let mut open = false;
-        let mut save = false;
-        let mut save_as = false;
-
-        egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("New\tCtrl+N").clicked() {
-                        self.request(ctx, Action::New);
-                        ui.close_menu();
-                    }
-                    if ui.button("Open…\tCtrl+O").clicked() {
-                        open = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("Save\tCtrl+S").clicked() {
-                        save = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("Save As…\tCtrl+Shift+S").clicked() {
-                        save_as = true;
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui.button("Quit").clicked() {
-                        ui.close_menu();
-                        self.request(ctx, Action::Close);
-                    }
-                });
-                if self.path.is_some() {
-                    let name = self
-                        .path
-                        .as_deref()
-                        .and_then(|p| p.file_name())
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.weak(format!("{name}{}", if self.dirty { " *" } else { "" }));
-                    });
+        // Shortcuts pressed inside the native editor arrive through the subclass.
+        let mut quit = false;
+        match win_edit::ACTION.swap(0, Ordering::Relaxed) {
+            win_edit::ACT_NEW => {
+                if self.confirm_discard(parent) {
+                    self.new_file();
                 }
+            }
+            win_edit::ACT_OPEN => self.open_file(),
+            win_edit::ACT_SAVE => {
+                self.save_file(false);
+            }
+            win_edit::ACT_SAVE_AS => {
+                self.save_file(true);
+            }
+            win_edit::ACT_QUIT => quit = true,
+            _ => {}
+        }
+
+        // Same shortcuts when the egui part has the keyboard focus.
+        let ctrl = egui::Modifiers::COMMAND;
+        if shortcut(ctx, ctrl, egui::Key::N) && self.confirm_discard(parent) {
+            self.new_file();
+        }
+        if shortcut(ctx, ctrl, egui::Key::O) {
+            self.open_file();
+        }
+        if shortcut(ctx, ctrl, egui::Key::S) {
+            self.save_file(false);
+        }
+        if shortcut(ctx, ctrl | egui::Modifiers::SHIFT, egui::Key::S) {
+            self.save_file(true);
+        }
+
+        let top = egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("New").clicked() && self.confirm_discard(parent) {
+                    self.new_file();
+                }
+                if ui.button("Open").clicked() {
+                    self.open_file();
+                }
+                if ui.button("Save").clicked() {
+                    self.save_file(false);
+                }
+                if ui.button("Save As").clicked() {
+                    self.save_file(true);
+                }
+                ui.separator();
+                if ui.button("Quit").clicked() {
+                    quit = true;
+                }
+                let name = self
+                    .path
+                    .as_deref()
+                    .and_then(|p| p.file_name())
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "Untitled".into());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.weak(format!("{name}{}", if self.dirty { " *" } else { "" }));
+                });
             });
         });
 
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+        let bottom = egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| match &self.error {
                 Some(err) => {
                     ui.colored_label(egui::Color32::from_rgb(255, 90, 90), err);
@@ -234,77 +297,42 @@ impl eframe::App for Notepad {
             });
         });
 
-        if let Some(action) = self.pending {
-            let mut choice: Option<u8> = None;
-            egui::Window::new("Unsaved changes")
-                .collapsible(false)
-                .resizable(false)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    ui.label("You have unsaved changes. Save them before continuing?");
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        if ui.button("Save").clicked() {
-                            choice = Some(0);
-                        }
-                        if ui.button("Discard").clicked() {
-                            choice = Some(1);
-                        }
-                        if ui.button("Cancel").clicked() {
-                            choice = Some(2);
-                        }
-                    });
-                });
-            match choice {
-                Some(0) => {
-                    if self.save(false) {
-                        self.pending = None;
-                        self.do_action(ctx, action);
-                    }
-                }
-                Some(1) => {
-                    self.dirty = false;
-                    self.pending = None;
-                    self.do_action(ctx, action);
-                }
-                Some(2) => self.pending = None,
-                _ => {}
-            }
-        }
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let response = ui.add_sized(
-                [ui.available_width(), ui.available_height()],
-                egui::TextEdit::multiline(&mut self.text)
-                    .font(egui::TextStyle::Monospace)
-                    .desired_width(f32::INFINITY)
-                    .hint_text("Start typing…"),
+        // The native editor covers the area between the toolbar and the status bar.
+        let full = ctx.screen_rect();
+        let top_h = top.response.rect.height().max(0.0);
+        let bottom_h = bottom.response.rect.height().max(0.0);
+        let rect = egui::Rect::from_min_max(
+            egui::pos2(full.min.x, full.min.y + top_h),
+            egui::pos2(full.max.x, full.max.y - bottom_h),
+        );
+        if let Some(edit) = self.edit.as_ref() {
+            let ppp = ctx.pixels_per_point();
+            edit.set_rect(
+                (rect.min.x * ppp).round() as i32,
+                (rect.min.y * ppp).round() as i32,
+                (rect.width() * ppp).round() as i32,
+                (rect.height() * ppp).round() as i32,
             );
-            if response.changed() {
-                self.dirty = true;
-            }
-        });
+        }
 
-        if new_pressed {
-            self.request(ctx, Action::New);
+        self.sync_from_editor();
+
+        // Keep the keyboard in the editor even after clicking the toolbar.
+        if let Some(edit) = self.edit.as_ref() {
+            if !edit.has_focus() {
+                edit.focus();
+            }
         }
-        if open_pressed {
-            self.open();
-        }
-        if save_pressed {
-            self.save(false);
-        }
-        if save_as_pressed {
-            self.save(true);
-        }
-        if open {
-            self.open();
-        }
-        if save {
-            self.save(false);
-        }
-        if save_as {
-            self.save(true);
+
+        // Close handling.
+        if ctx.input(|i| i.viewport().close_requested()) {
+            if self.confirm_discard(parent) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            }
+        } else if quit && self.confirm_discard(parent) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
 
         let name = self
