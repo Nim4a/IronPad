@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.IronPad" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@android:color/white</item>
+        <item name="android:windowBackground">#181818</item>
+        <item name="android:textColorPrimary">#E0E0E0</item>
+        <item name="android:editTextColor">#E0E0E0</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+</resources>
