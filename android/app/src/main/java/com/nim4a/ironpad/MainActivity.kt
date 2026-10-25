@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
-import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -57,7 +56,7 @@ class MainActivity : AppCompatActivity() {
             }
             tabStrip.addView(chip)
             val close = TextView(this).apply {
-                text = "  ×"
+                text = "  \u00D7"
                 setTextColor(Color.parseColor("#888E98"))
                 textSize = 13f
                 setPadding(4, 12, 12, 12)
@@ -104,39 +103,37 @@ class MainActivity : AppCompatActivity() {
             texts[k]?.let { remapped[ni] = it }
             ni++
         }
-        texts.clear(); texts.putAll(remapped)
+        texts.clear()
+        texts.putAll(remapped)
         editor.setText(texts[active] ?: "")
         rebuildTabs()
     }
 
     private fun updateLineNumbers() {
-        val n = editor.text.toString().count { it == '
-' } + 1
-        lineNumbers.text = (1..n).joinToString("
-")
+        val n = editor.text.toString().count { it == '\n' } + 1
+        lineNumbers.text = (1..n).joinToString("\n")
     }
 
     private fun updateStatus() {
         val t = editor.text.toString()
-        val lines = t.count { it == '
-' } + 1
+        val lines = t.count { it == '\n' } + 1
         val words = t.split(Regex("\s+")).count { it.isNotEmpty() }
         val chars = t.length
-        status.text = "$lines lines  ·  $words words  ·  $chars chars  ·  ${tabs.size} tabs"
+        status.text = "$lines lines  \u00B7  $words words  \u00B7  $chars chars  \u00B7  ${tabs.size} tabs"
     }
 
-    private fun highlight(e: android.text.Editable) {
+    private fun highlight(e: Editable) {
         val text = e.toString()
         e.getSpans(0, e.length, ForegroundColorSpan::class.java).forEach { e.removeSpan(it) }
         val rules = listOf(
-            "#808080" to Regex("//.*|#.*"),
-            "#C586C0" to Regex("\b(fun|val|var|class|object|if|else|for|while|return|import|package|override|private|public|protected|static|final|void|int|long|double|float|boolean|String|Boolean|Int|Long|Float|Double)\b"),
-            "#CE9178" to Regex("\"([^\\"\]|\.)*\"|'([^'\]|\.)*'"),
-            "#B5CEA8" to Regex("\b\d+(\.\d+)?\b")
+            "#808080" to Regex("""//.*|#.*"""),
+            "#C586C0" to Regex("""\b(fun|val|var|class|object|if|else|for|while|return|import|package|override|private|public|protected|static|final|void|int|long|double|float|boolean|String|Boolean|Int|Long|Float|Double)\b"""),
+            "#CE9178" to Regex(""""[^"\]*"|'[^'\]*'"""),
+            "#B5CEA8" to Regex("""\b\d+(\.\d+)?\b""")
         )
         for ((color, regex) in rules) {
             regex.findAll(text).forEach { m ->
-                e.setSpan(ForegroundColorSpan(android.graphics.Color.parseColor(color)), m.range.first, m.range.last, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                e.setSpan(ForegroundColorSpan(Color.parseColor(color)), m.range.first, m.range.last, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
         }
     }
