@@ -11,7 +11,7 @@
         android:orientation="horizontal"
         android:padding="8dp">
 
-        <Button android:id="@+id/btnNew" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/new" />
+        <Button android:id="@+id/btnNew" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/new_file" />
         <Button android:id="@+id/btnOpen" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/open" />
         <Button android:id="@+id/btnSave" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/save" />
     </LinearLayout>
