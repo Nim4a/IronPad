@@ -81,6 +81,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_open -> { openLauncher.launch(arrayOf("*/*")); true }
             R.id.action_save -> { saveFile(); true }
             R.id.action_save_as -> { saveAsLauncher.launch("untitled.txt"); true }
+            R.id.action_share -> { shareText(); true }
             R.id.action_theme -> { darkMode = !darkMode; applyTheme(); rebuildTabs(); true }
             else -> super.onOptionsItemSelected(item)
         }
@@ -101,6 +102,15 @@ class MainActivity : AppCompatActivity() {
         val uri = currentUri
         if (uri != null) writeUri(uri, makeCurrent = false)
         else saveAsLauncher.launch("untitled.txt")
+    }
+
+    private fun shareText() {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, editor.text.toString())
+            putExtra(Intent.EXTRA_SUBJECT, tabs.getOrElse(active) { "untitled" })
+        }
+        startActivity(Intent.createChooser(send, "Share"))
     }
 
     private fun readUri(uri: Uri) {
