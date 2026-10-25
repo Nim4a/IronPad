@@ -5,51 +5,63 @@
     android:orientation="vertical"
     android:background="#181818">
 
-    <LinearLayout
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp">
-
-        <Button android:id="@+id/btnNew" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/new_file" />
-        <Button android:id="@+id/btnOpen" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/open" />
-        <Button android:id="@+id/btnSave" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/save" />
-    </LinearLayout>
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fillViewport="true">
+        android:background="#23262C"
+        android:scrollbars="none">
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:id="@+id/tabStrip"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:padding="6dp" />
+    </HorizontalScrollView>
 
-            <TextView
-                android:id="@+id/lineNumbers"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:textColor="#888E98"
-                android:fontFamily="monospace"
-                android:textSize="14sp"
-                android:gravity="top|end" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:background="#181818">
 
-            <EditText
-                android:id="@+id/editor"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="#181818"
-                android:textColor="#E0E0E0"
-                android:fontFamily="monospace"
-                android:textSize="14sp"
-                android:gravity="top|start"
-                android:inputType="textMultiLine|textNoSuggestions"
-                android:scrollbars="vertical"
-                android:padding="8dp" />
-        </LinearLayout>
-    </ScrollView>
+        <TextView
+            android:id="@+id/lineNumbers"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:minWidth="40dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="8dp"
+            android:textColor="#888E98"
+            android:fontFamily="monospace"
+            android:textSize="14sp"
+            android:gravity="top|end"
+            android:background="#23262C" />
+
+        <EditText
+            android:id="@+id/editor"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="#181818"
+            android:textColor="#E0E0E0"
+            android:fontFamily="monospace"
+            android:textSize="14sp"
+            android:gravity="top|start"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:scrollbars="vertical"
+            android:padding="8dp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#23262C"
+        android:textColor="#888E98"
+        android:fontFamily="monospace"
+        android:textSize="12sp"
+        android:padding="6dp" />
 </LinearLayout>
