@@ -11,8 +11,8 @@ android {
         applicationId = "com.nim4a.ironpad"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.3.0"
+        versionCode = 18
+        versionName = "0.3.18"
     }
 
     buildTypes {

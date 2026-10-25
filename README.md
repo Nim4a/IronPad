@@ -1,7 +1,7 @@
 # IronPad
 
-[![CI](https://github.com/Nim4a/notepad-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Nim4a/notepad-rs/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Nim4a/notepad-rs)](https://github.com/Nim4a/notepad-rs/releases)
+[![CI](https://github.com/Nim4a/IronPad/actions/workflows/ci.yml/badge.svg)](https://github.com/Nim4a/IronPad/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Nim4a/IronPad)](https://github.com/Nim4a/IronPad/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A small, modern notepad for Windows written in Rust — [eframe](https://github.com/emilk/egui)/egui
@@ -33,7 +33,27 @@ central area every frame.
 
 ## Download
 
-Grab the latest `ironpad.exe` from [Releases](https://github.com/Nim4a/notepad-rs/releases).
+Grab the latest `ironpad.exe` (Windows) and `IronPad-Android-*.apk` (Android)
+from [Releases](https://github.com/Nim4a/IronPad/releases).
+
+## Android
+
+A native Kotlin port (`android/`) with the same IronPad look: dark/light theme,
+multi-tab editing, syntax highlighting, line numbers, and Persian/RTL support
+via the platform's text engine.
+
+- Min SDK 24, target SDK 34
+- Open / Save / Save As / Share text / Share as file
+- Tap a `.txt` file in any file manager → "Open with IronPad"
+- Built by CI (`.github/workflows/android.yml`); APK is signed with the debug
+  keystore for sideloading
+
+Build locally:
+
+```bash
+cd android && ./gradlew assembleRelease
+```
+
 
 ## Build from source
 
