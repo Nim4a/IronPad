@@ -5,8 +5,7 @@
 
     <application
         android:label="@string/app_name"
-        android:theme="@style/Theme.IronPad"
-        android:icon="@mipmap/ic_launcher">
+        android:theme="@style/Theme.IronPad">
         <activity
             android:name=".MainActivity"
             android:exported="true"
