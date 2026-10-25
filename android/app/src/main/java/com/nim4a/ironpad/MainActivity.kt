@@ -117,7 +117,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateStatus() {
         val t = editor.text.toString()
         val lines = t.count { it == '\n' } + 1
-        val words = t.split(Regex("\s+")).count { it.isNotEmpty() }
+        val words = t.split(Regex("""\s+""")).count { it.isNotEmpty() }
         val chars = t.length
         status.text = "$lines lines  \u00B7  $words words  \u00B7  $chars chars  \u00B7  ${tabs.size} tabs"
     }
@@ -128,7 +128,7 @@ class MainActivity : AppCompatActivity() {
         val rules = listOf(
             "#808080" to Regex("""//.*|#.*"""),
             "#C586C0" to Regex("""\b(fun|val|var|class|object|if|else|for|while|return|import|package|override|private|public|protected|static|final|void|int|long|double|float|boolean|String|Boolean|Int|Long|Float|Double)\b"""),
-            "#CE9178" to Regex(""""[^"\]*"|'[^'\]*'"""),
+            "#CE9178" to Regex(""" "[^"]*"|'[^']*' """),
             "#B5CEA8" to Regex("""\b\d+(\.\d+)?\b""")
         )
         for ((color, regex) in rules) {
