@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity() {
     private val tabs = mutableListOf("untitled")
     private var active = 0
     private val texts = mutableMapOf<Int, String>()
+    private var darkMode = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +40,7 @@ class MainActivity : AppCompatActivity() {
         })
 
         rebuildTabs()
+        applyTheme()
         updateLineNumbers()
         updateStatus()
     }
@@ -48,16 +50,16 @@ class MainActivity : AppCompatActivity() {
         for (i in tabs.indices) {
             val chip = TextView(this).apply {
                 text = tabs[i]
-                setTextColor(if (i == active) Color.WHITE else Color.parseColor("#AAB0BA"))
+                setTextColor(if (i == active) (if (darkMode) Color.WHITE else Color.parseColor("#1A1A1A")) else Color.parseColor(if (darkMode) "#AAB0BA" else "#555555"))
                 textSize = 13f
                 setPadding(24, 12, 24, 12)
-                setBackgroundColor(if (i == active) Color.parseColor("#353A44") else Color.parseColor("#1B1D22"))
+                setBackgroundColor(if (i == active) Color.parseColor(if (darkMode) "#353A44" else "#D0D0D0") else Color.parseColor(if (darkMode) "#1B1D22" else "#F0F0F0"))
                 setOnClickListener { switchTab(i) }
             }
             tabStrip.addView(chip)
             val close = TextView(this).apply {
                 text = "  \u00D7"
-                setTextColor(Color.parseColor("#888E98"))
+                setTextColor(Color.parseColor(if (darkMode) "#888E98" else "#6B6B6B"))
                 textSize = 13f
                 setPadding(4, 12, 12, 12)
                 setOnClickListener { closeTab(i) }
@@ -66,12 +68,20 @@ class MainActivity : AppCompatActivity() {
         }
         val plus = TextView(this).apply {
             text = "  +  "
-            setTextColor(Color.parseColor("#AAB0BA"))
+            setTextColor(Color.parseColor(if (darkMode) "#AAB0BA" else "#555555"))
             textSize = 16f
             setPadding(16, 12, 16, 12)
             setOnClickListener { newTab() }
         }
         tabStrip.addView(plus)
+        val themeBtn = TextView(this).apply {
+            text = if (darkMode) "  ☀  " else "  ☾  "
+            setTextColor(Color.parseColor(if (darkMode) "#AAB0BA" else "#555555"))
+            textSize = 16f
+            setPadding(16, 12, 16, 12)
+            setOnClickListener { darkMode = !darkMode; applyTheme(); rebuildTabs() }
+        }
+        tabStrip.addView(themeBtn)
     }
 
     private fun switchTab(i: Int) {
@@ -107,6 +117,20 @@ class MainActivity : AppCompatActivity() {
         texts.putAll(remapped)
         editor.setText(texts[active] ?: "")
         rebuildTabs()
+    }
+
+    private fun applyTheme() {
+        val bg = if (darkMode) "#181818" else "#F5F5F5"
+        val panel = if (darkMode) "#23262C" else "#E8E8E8"
+        val text = if (darkMode) "#E0E0E0" else "#1A1A1A"
+        val num = if (darkMode) "#888E98" else "#6B6B6B"
+        findViewById<android.widget.LinearLayout>(R.id.tabStrip).setBackgroundColor(Color.parseColor(panel))
+        lineNumbers.setBackgroundColor(Color.parseColor(panel))
+        lineNumbers.setTextColor(Color.parseColor(num))
+        editor.setBackgroundColor(Color.parseColor(bg))
+        editor.setTextColor(Color.parseColor(text))
+        status.setBackgroundColor(Color.parseColor(panel))
+        status.setTextColor(Color.parseColor(num))
     }
 
     private fun updateLineNumbers() {
