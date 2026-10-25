@@ -69,5 +69,7 @@
         android:textColor="#888E98"
         android:fontFamily="monospace"
         android:textSize="12sp"
+        android:maxLines="1"
+        android:ellipsize="end"
         android:padding="6dp" />
 </LinearLayout>
