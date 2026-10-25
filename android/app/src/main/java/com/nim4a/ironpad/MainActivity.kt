@@ -1,5 +1,6 @@
 package com.nim4a.ironpad
 
+import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -45,6 +46,10 @@ class MainActivity : AppCompatActivity() {
         supportActionBar?.title = "IronPad"
 
 
+        if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
+            readUri(intent.data!!)
+        }
+
         editor.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -73,7 +78,7 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_new -> { newFile(); true }
-            R.id.action_open -> { openLauncher.launch(arrayOf("text/*")); true }
+            R.id.action_open -> { openLauncher.launch(arrayOf("*/*")); true }
             R.id.action_save -> { saveFile(); true }
             R.id.action_save_as -> { saveAsLauncher.launch("untitled.txt"); true }
             R.id.action_theme -> { darkMode = !darkMode; applyTheme(); rebuildTabs(); true }
@@ -104,6 +109,8 @@ class MainActivity : AppCompatActivity() {
                 editor.setText(stream.bufferedReader().readText())
                 currentUri = uri
                 supportActionBar?.title = uri.lastPathSegment ?: "IronPad"
+                updateLineNumbers()
+                updateStatus()
             }
         } catch (_: Exception) { }
     }
