@@ -124,13 +124,27 @@ class MainActivity : AppCompatActivity() {
         val panel = if (darkMode) "#23262C" else "#E8E8E8"
         val text = if (darkMode) "#E0E0E0" else "#1A1A1A"
         val num = if (darkMode) "#888E98" else "#6B6B6B"
-        findViewById<android.widget.LinearLayout>(R.id.tabStrip).setBackgroundColor(Color.parseColor(panel))
+        // tab strip + its scroll container (fixes the dark corner in light mode)
+        val strip = findViewById<android.widget.LinearLayout>(R.id.tabStrip)
+        strip.setBackgroundColor(Color.parseColor(panel))
+        (strip.parent as? android.widget.HorizontalScrollView)?.setBackgroundColor(Color.parseColor(panel))
         lineNumbers.setBackgroundColor(Color.parseColor(panel))
         lineNumbers.setTextColor(Color.parseColor(num))
         editor.setBackgroundColor(Color.parseColor(bg))
         editor.setTextColor(Color.parseColor(text))
         status.setBackgroundColor(Color.parseColor(panel))
         status.setTextColor(Color.parseColor(num))
+        // system status bar: color + icon contrast
+        window.statusBarColor = Color.parseColor(panel)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            window.insetsController?.setSystemBarsAppearance(
+                if (darkMode) 0 else android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = if (darkMode) 0 else android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
     }
 
     private fun updateLineNumbers() {
