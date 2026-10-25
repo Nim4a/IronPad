@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_save -> { saveFile(); true }
             R.id.action_save_as -> { saveAsLauncher.launch("untitled.txt"); true }
             R.id.action_share -> { shareText(); true }
+            R.id.action_share_file -> { shareFile(); true }
             R.id.action_theme -> { darkMode = !darkMode; applyTheme(); rebuildTabs(); true }
             else -> super.onOptionsItemSelected(item)
         }
@@ -110,7 +111,21 @@ class MainActivity : AppCompatActivity() {
             putExtra(Intent.EXTRA_TEXT, editor.text.toString())
             putExtra(Intent.EXTRA_SUBJECT, tabs.getOrElse(active) { "untitled" })
         }
-        startActivity(Intent.createChooser(send, "Share"))
+        startActivity(Intent.createChooser(send, "Share text"))
+    }
+
+    private fun shareFile() {
+        val name = (tabs.getOrElse(active) { "untitled" }) + ".txt"
+        val file = java.io.File(cacheDir, name)
+        file.writeText(editor.text.toString())
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, name)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, "Share file"))
     }
 
     private fun readUri(uri: Uri) {
