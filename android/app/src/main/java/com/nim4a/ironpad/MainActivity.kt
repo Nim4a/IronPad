@@ -1,5 +1,6 @@
 package com.nim4a.ironpad
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -26,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private val texts = mutableMapOf<Int, String>()
     private var darkMode = true
     private var currentUri: Uri? = null
+    private var findLastIndex = 0
 
     private val openLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let { readUri(it) }
@@ -57,6 +59,7 @@ class MainActivity : AppCompatActivity() {
                 highlight(s ?: return)
                 updateLineNumbers()
                 updateStatus()
+                findLastIndex = 0
             }
         })
 
@@ -83,6 +86,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_save_as -> { saveAsLauncher.launch("untitled.txt"); true }
             R.id.action_share -> { shareText(); true }
             R.id.action_share_file -> { shareFile(); true }
+            R.id.action_find -> { showFindReplace(); true }
             R.id.action_theme -> { darkMode = !darkMode; applyTheme(); rebuildTabs(); true }
             else -> super.onOptionsItemSelected(item)
         }
@@ -127,6 +131,64 @@ class MainActivity : AppCompatActivity() {
         }
         startActivity(Intent.createChooser(send, "Share file"))
     }
+
+    private fun showFindReplace() {
+        val findInput = EditText(this).apply { hint = "Find"; setSingleLine(true) }
+        val replaceInput = EditText(this).apply { hint = "Replace"; setSingleLine(true) }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(8))
+            addView(findInput)
+            addView(replaceInput)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Find / Replace")
+            .setView(layout)
+            .setPositiveButton("Find Next") { _, _ ->
+                findLastIndex = findNext(findInput.text.toString(), findLastIndex)
+            }
+            .setNeutralButton("Replace") { _, _ ->
+                replaceOne(findInput.text.toString(), replaceInput.text.toString())
+            }
+            .setNegativeButton("Replace All") { _, _ ->
+                replaceAll(findInput.text.toString(), replaceInput.text.toString())
+                findLastIndex = 0
+            }
+            .create()
+            .show()
+    }
+
+    private fun findNext(needle: String, from: Int): Int {
+        if (needle.isEmpty()) return 0
+        val text = editor.text.toString()
+        var idx = text.indexOf(needle, from)
+        if (idx < 0) {
+            idx = text.indexOf(needle, 0)
+            if (idx < 0) return 0
+        }
+        editor.setSelection(idx, idx + needle.length)
+        return idx + needle.length
+    }
+
+    private fun replaceOne(needle: String, replacement: String) {
+        val start = editor.selectionStart
+        val end = editor.selectionEnd
+        if (start != end && editor.text.toString().substring(start, end) == needle) {
+            editor.text.replace(start, end, replacement)
+        }
+    }
+
+    private fun replaceAll(needle: String, replacement: String) {
+        if (needle.isEmpty()) return
+        val text = editor.text.toString()
+        val replaced = text.replace(needle, replacement)
+        if (replaced != text) {
+            editor.text.clear()
+            editor.text.append(replaced)
+        }
+    }
+
+    private fun dp(px: Int): Int = (px * resources.displayMetrics.density + 0.5f).toInt()
 
     private fun readUri(uri: Uri) {
         try {
