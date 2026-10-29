@@ -202,13 +202,15 @@ class MainActivity : AppCompatActivity() {
         }
         val bgPaint = android.graphics.Paint().apply { color = bgColor }
 
-        var page = newPdfPage(doc, pageWidth, pageHeight, bgPaint)
+        var pageNo = 1
+        var page = newPdfPage(doc, pageNo, pageWidth, pageHeight, bgPaint)
         var canvas = page.canvas
         var y = margin
         for (line in lines) {
             if (y + lineHeight > pageHeight - margin) {
                 doc.finishPage(page)
-                page = newPdfPage(doc, pageWidth, pageHeight, bgPaint)
+                pageNo++
+                page = newPdfPage(doc, pageNo, pageWidth, pageHeight, bgPaint)
                 canvas = page.canvas
                 y = margin
             }
@@ -219,8 +221,8 @@ class MainActivity : AppCompatActivity() {
         return doc
     }
 
-    private fun newPdfPage(doc: PdfDocument, w: Float, h: Float, bgPaint: android.graphics.Paint): PdfDocument.Page {
-        val info = PdfDocument.PageInfo.Builder(w.toInt(), h.toInt(), doc.pageCount + 1).create()
+    private fun newPdfPage(doc: PdfDocument, pageNo: Int, w: Float, h: Float, bgPaint: android.graphics.Paint): PdfDocument.Page {
+        val info = PdfDocument.PageInfo.Builder(w.toInt(), h.toInt(), pageNo).create()
         val page = doc.startPage(info)
         page.canvas.drawRect(0f, 0f, w, h, bgPaint)
         return page
