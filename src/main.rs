@@ -93,6 +93,11 @@ struct IronPad {
     syntaxes: Option<(SyntaxSet, ThemeSet)>,
     highlight_dirty: bool,
     last_edit: Instant,
+    /// Find / Replace state.
+    find_show: bool,
+    find_needle: String,
+    find_replacement: String,
+    find_index: usize,
 }
 
 impl IronPad {
@@ -118,6 +123,10 @@ impl IronPad {
             syntaxes: None,
             highlight_dirty: false,
             last_edit: Instant::now(),
+            find_show: false,
+            find_needle: String::new(),
+            find_replacement: String::new(),
+            find_index: 0,
         }
     }
 
@@ -289,6 +298,62 @@ impl IronPad {
         self.tabs.iter().any(|t| t.dirty)
     }
 
+    fn find_next(&mut self) {
+        let Some(edit) = self.edit.as_ref() else { return };
+        if self.find_needle.is_empty() {
+            return;
+        }
+        let text = edit.get_text();
+        let start = self.find_index;
+        let idx = text[start..].find(&self.find_needle);
+        match idx {
+            Some(rel) => {
+                let abs = start + rel;
+                edit.set_selection(abs as i32, (abs + self.find_needle.len()) as i32);
+                self.find_index = abs + self.find_needle.len();
+            }
+            None => {
+                // wrap around
+                match text.find(&self.find_needle) {
+                    Some(abs) => {
+                        edit.set_selection(abs as i32, (abs + self.find_needle.len()) as i32);
+                        self.find_index = abs + self.find_needle.len();
+                    }
+                    None => self.find_index = 0,
+                }
+            }
+        }
+    }
+
+    fn replace_one(&mut self) {
+        let Some(edit) = self.edit.as_ref() else { return };
+        let (s, e) = edit.get_selection();
+        if s != e {
+            let text = edit.get_text();
+            if text.get(s as usize..e as usize) == Some(&self.find_needle) {
+                let mut new_text = text;
+                new_text.replace_range(s as usize..e as usize, &self.find_replacement);
+                edit.set_text(&new_text);
+                let pos = s as i32 + self.find_replacement.len() as i32;
+                edit.set_selection(pos, pos);
+            }
+        }
+        self.find_next();
+    }
+
+    fn replace_all(&mut self) {
+        if self.find_needle.is_empty() {
+            return;
+        }
+        let Some(edit) = self.edit.as_ref() else { return };
+        let text = edit.get_text();
+        let replaced = text.replace(&self.find_needle, &self.find_replacement);
+        if replaced != text {
+            edit.set_text(&replaced);
+        }
+        self.find_index = 0;
+    }
+
     /// Syntax highlighting for the active tab, applied to the native editor.
     fn highlight(&mut self) -> bool {
         if self.syntaxes.is_none() {
@@ -426,6 +491,7 @@ impl eframe::App for IronPad {
                 self.save_tab(self.active, true);
             }
             win_edit::ACT_QUIT => quit = true,
+            win_edit::ACT_FIND => self.find_show = true,
             _ => {}
         }
 
@@ -442,6 +508,9 @@ impl eframe::App for IronPad {
         }
         if shortcut(ctx, ctrl | egui::Modifiers::SHIFT, egui::Key::S) {
             self.save_tab(self.active, true);
+        }
+        if shortcut(ctx, ctrl, egui::Key::F) {
+            self.find_show = true;
         }
         if shortcut(ctx, ctrl, egui::Key::W) {
             let idx = self.active;
@@ -463,6 +532,9 @@ impl eframe::App for IronPad {
                 }
                 if ui.button("Save As").clicked() {
                     self.save_tab(self.active, true);
+                }
+                if ui.button("Find").clicked() {
+                    self.find_show = true;
                 }
                 ui.separator();
                 if ui.button("Quit").clicked() {
@@ -560,6 +632,49 @@ impl eframe::App for IronPad {
                 }
             });
         });
+
+        // Find / Replace dialog (egui modal).
+        let mut find_show = self.find_show;
+        if find_show {
+            let mut find_next = false;
+            let mut replace_one = false;
+            let mut replace_all = false;
+            egui::Window::new("Find / Replace")
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut find_show)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Find:");
+                        ui.text_edit_singleline(&mut self.find_needle);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Replace:");
+                        ui.text_edit_singleline(&mut self.find_replacement);
+                    });
+                    ui.horizontal(|ui| {
+                        if ui.button("Find Next").clicked() {
+                            find_next = true;
+                        }
+                        if ui.button("Replace").clicked() {
+                            replace_one = true;
+                        }
+                        if ui.button("Replace All").clicked() {
+                            replace_all = true;
+                        }
+                    });
+                });
+            self.find_show = find_show;
+            if find_next {
+                self.find_next();
+            }
+            if replace_one {
+                self.replace_one();
+            }
+            if replace_all {
+                self.replace_all();
+            }
+        }
 
         // The native editor covers the area below the toolbar and the tab strip.
         // egui has to paint that area itself: the Rich Edit only paints its own
