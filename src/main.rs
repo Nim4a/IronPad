@@ -298,6 +298,27 @@ impl IronPad {
         self.tabs.iter().any(|t| t.dirty)
     }
 
+    fn export_pdf(&mut self) {
+        let text = self.tab().text.clone();
+        let name = self
+            .tab()
+            .path
+            .as_deref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "untitled".into());
+        let default = format!("{name}.pdf");
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("PDF", &["pdf"])
+            .set_file_name(&default)
+            .save_file()
+        {
+            if let Err(e) = write_pdf(&path, &text) {
+                self.error = Some(format!("PDF export failed: {e}"));
+            }
+        }
+    }
+
     fn find_next(&mut self) {
         let Some(edit) = self.edit.as_ref() else { return };
         if self.find_needle.is_empty() {
@@ -418,6 +439,117 @@ fn colorref(c: Color) -> u32 {
     ((c.b as u32) << 16) | ((c.g as u32) << 8) | c.r as u32
 }
 
+/// Minimal PDF export: plain text, built-in Courier font.
+fn write_pdf(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    let lines: Vec<String> = text
+        .split('\n')
+        .flat_map(|l| {
+            if l.is_empty() {
+                vec![String::new()]
+            } else {
+                l.as_bytes().chunks(95).map(|c| String::from_utf8_lossy(c).into_owned()).collect()
+            }
+        })
+        .collect();
+
+    let page_h: f64 = 842.0;
+    let margin: f64 = 50.0;
+    let line_h: f64 = 16.8;
+    let lines_per_page = ((page_h - 2.0 * margin) / line_h).floor() as usize;
+
+    let mut pages: Vec<Vec<String>> = Vec::new();
+    let mut cur: Vec<String> = Vec::new();
+    for line in lines {
+        cur.push(line);
+        if cur.len() >= lines_per_page {
+            pages.push(std::mem::take(&mut cur));
+        }
+    }
+    if !cur.is_empty() {
+        pages.push(cur);
+    }
+
+    let mut out: Vec<u8> = b"%PDF-1.4\n".to_vec();
+    let mut offsets: Vec<u64> = Vec::new();
+    let mut obj = 1u64;
+
+    macro_rules! emit {
+        ($content:expr) => {{
+            offsets.push(out.len() as u64);
+            out.extend_from_slice(format!("{} 0 obj\n", obj).as_bytes());
+            out.extend_from_slice($content);
+            out.extend_from_slice(b"\nendobj\n");
+            obj += 1;
+        }};
+    }
+
+    let catalog = obj;
+    emit!(format!("<< /Type /Catalog /Pages {} 0 R >>", obj + 1).as_bytes());
+
+    let pages_obj = obj;
+    let mut kids = format!("<< /Type /Pages /Count {} /Kids [", pages.len());
+    // obj layout: 1=catalog, 2=pages, 3=font, then 4+i*2=page, 5+i*2=content
+    for i in 0..pages.len() {
+        kids.push_str(&format!("{} 0 R ", 4 + i * 2));
+    }
+    kids.push_str("] >>");
+    emit!(kids.as_bytes());
+
+    let font_obj = obj;
+    emit!(b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>");
+
+    for page_lines in &pages {
+        let page_obj = obj;
+        emit!(
+            format!(
+                "<< /Type /Page /Parent {} 0 R /MediaBox [0 0 595 842] /Contents {} 0 R /Resources << /Font << /F1 {} 0 R >> >> >>",
+                pages_obj, obj + 2, font_obj
+            )
+            .as_bytes()
+        );
+
+        let mut stream = String::from("BT /F1 12 Tf 50 750 Td\n");
+        for line in page_lines {
+            stream.push('(');
+            for c in line.chars() {
+                match c {
+                    '(' | ')' | '\\' => stream.push('\\'),
+                    '\n' => stream.push_str("\\n"),
+                    '\r' => stream.push_str("\\r"),
+                    '\t' => stream.push_str("\\t"),
+                    c if (c as u32) < 0x20 => stream.push_str(&format!("\\{:03o}", c as u32)),
+                    c => stream.push(c),
+                }
+            }
+            stream.push_str(") Tj\n0 -16.8 Td\n");
+        }
+        let sb = stream.into_bytes();
+        out.extend_from_slice(format!("{} 0 obj\n<< /Length {} >>\nstream\n", obj, sb.len()).as_bytes());
+        out.extend_from_slice(&sb);
+        out.extend_from_slice(b"\nendstream\nendobj\n");
+        obj += 1;
+    }
+
+    // xref
+    let xref_offset = out.len() as u64;
+    out.extend_from_slice(b"xref\n");
+    out.extend_from_slice(format!("0 {}\n", obj).as_bytes());
+    out.extend_from_slice(b"0000000000 65535 f \n");
+    for off in &offsets {
+        out.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root {} 0 R >>\nstartxref\n{}\n%%EOF\n",
+            obj, catalog, xref_offset
+        )
+        .as_bytes(),
+    );
+
+    std::fs::write(path, out)?;
+    Ok(())
+}
+
 fn setup_fonts(ctx: &egui::Context) {
     // Add Segoe UI as fallback so Persian/Arabic text renders instead of boxes.
     if let Ok(data) = std::fs::read("C:\\Windows\\Fonts\\segoeui.ttf") {
@@ -535,6 +667,9 @@ impl eframe::App for IronPad {
                 }
                 if ui.button("Find").clicked() {
                     self.find_show = true;
+                }
+                if ui.button("Export PDF").clicked() {
+                    self.export_pdf();
                 }
                 ui.separator();
                 if ui.button("Quit").clicked() {
