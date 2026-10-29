@@ -3,4 +3,9 @@
     <string name="open">Open</string>
     <string name="save">Save</string>
     <string name="new_file">New</string>
+    <string name="export_pdf">Export as PDF</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_sepia">Sepia</string>
+    <string name="select_theme">Select theme</string>
 </resources>

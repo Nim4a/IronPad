@@ -8,5 +8,6 @@
     <item android:id="@+id/action_share" android:title="Share text" app:showAsAction="never" />
     <item android:id="@+id/action_share_file" android:title="Share as file" app:showAsAction="never" />
     <item android:id="@+id/action_find" android:title="Find / Replace" app:showAsAction="never" />
-    <item android:id="@+id/action_theme" android:title="Toggle theme" app:showAsAction="never" />
+    <item android:id="@+id/action_theme" android:title="Select theme" app:showAsAction="never" />
+    <item android:id="@+id/action_export_pdf" android:title="Export as PDF" app:showAsAction="never" />
 </menu>

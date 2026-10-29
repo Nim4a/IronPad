@@ -1,8 +1,11 @@
 package com.nim4a.ironpad
 
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Color
+import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
@@ -28,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private var darkMode = true
     private var currentUri: Uri? = null
     private var findLastIndex = 0
+    private var theme = "dark" // dark | light | sepia
 
     private val openLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let { readUri(it) }
@@ -35,9 +39,15 @@ class MainActivity : AppCompatActivity() {
     private val saveAsLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
         uri?.let { writeUri(it, makeCurrent = true) }
     }
+    private val pdfLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri: Uri? ->
+        uri?.let { exportPdfToUri(it) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // load persisted theme
+        val prefs = getSharedPreferences("ironpad", Context.MODE_PRIVATE)
+        theme = prefs.getString("theme", "dark")!!
         setContentView(R.layout.activity_main)
         editor = findViewById(R.id.editor)
         lineNumbers = findViewById(R.id.lineNumbers)
@@ -87,7 +97,8 @@ class MainActivity : AppCompatActivity() {
             R.id.action_share -> { shareText(); true }
             R.id.action_share_file -> { shareFile(); true }
             R.id.action_find -> { showFindReplace(); true }
-            R.id.action_theme -> { darkMode = !darkMode; applyTheme(); rebuildTabs(); true }
+            R.id.action_theme -> { showThemeSelector(); true }
+            R.id.action_export_pdf -> { pdfLauncher.launch("IronPad.pdf"); true }
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -132,7 +143,88 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(send, "Share file"))
     }
 
-    private fun showFindReplace() {
+    private fun showThemeSelector() {
+        val items = arrayOf(getString(R.string.theme_dark), getString(R.string.theme_light), getString(R.string.theme_sepia))
+        val current = when (theme) {
+            "light" -> 1
+            "sepia" -> 2
+            else -> 0
+        }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.select_theme))
+            .setSingleChoiceItems(items, current) { _, which ->
+                theme = when (which) {
+                    1 -> "light"
+                    2 -> "sepia"
+                    else -> "dark"
+                }
+                applyTheme()
+            }
+            .setPositiveButton("OK") { _, _ -> }
+            .create()
+            .show()
+    }
+
+    private fun exportPdfToUri(uri: Uri) {
+        try {
+            contentResolver.openOutputStream(uri)?.use { out ->
+                val doc = generatePdf()
+                doc.writeTo(out)
+                doc.close()
+            }
+        } catch (_: Exception) { }
+    }
+
+    private fun generatePdf(): PdfDocument {
+        val doc = PdfDocument()
+        val text = editor.text.toString()
+        val lines = text.split("\n")
+        val pageWidth = 595f
+        val pageHeight = 842f
+        val margin = 50f
+        val fontSize = 12f
+        val lineHeight = fontSize * 1.4f
+
+        val textColor = when (theme) {
+            "light" -> Color.BLACK
+            "sepia" -> Color.parseColor("#4A3A28")
+            else -> Color.WHITE
+        }
+        val bgColor = when (theme) {
+            "light" -> Color.WHITE
+            "sepia" -> Color.parseColor("#F5E6D3")
+            else -> Color.parseColor("#181818")
+        }
+        val paint = android.graphics.Paint().apply {
+            color = textColor
+            textSize = fontSize
+            typeface = android.graphics.Typeface.MONOSPACE
+        }
+        val bgPaint = android.graphics.Paint().apply { color = bgColor }
+
+        var page = newPdfPage(doc, pageWidth, pageHeight, bgPaint)
+        var canvas = page.canvas
+        var y = margin
+        for (line in lines) {
+            if (y + lineHeight > pageHeight - margin) {
+                doc.finishPage(page)
+                page = newPdfPage(doc, pageWidth, pageHeight, bgPaint)
+                canvas = page.canvas
+                y = margin
+            }
+            canvas.drawText(line, margin, y, paint)
+            y += lineHeight
+        }
+        doc.finishPage(page)
+        return doc
+    }
+
+    private fun newPdfPage(doc: PdfDocument, w: Float, h: Float, bgPaint: android.graphics.Paint): PdfDocument.Page {
+        val info = PdfDocument.PageInfo.Builder(w.toInt(), h.toInt(), doc.pageCount + 1).create()
+        val page = doc.startPage(info)
+        page.canvas.drawRect(0f, 0f, w, h, bgPaint)
+        return page
+    }
         val findInput = EditText(this).apply { hint = "Find"; setSingleLine(true) }
         val replaceInput = EditText(this).apply { hint = "Replace"; setSingleLine(true) }
         val layout = LinearLayout(this).apply {
@@ -292,10 +384,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyTheme() {
-        val bg = if (darkMode) "#181818" else "#F5F5F5"
-        val panel = if (darkMode) "#23262C" else "#E8E8E8"
-        val text = if (darkMode) "#E0E0E0" else "#1A1A1A"
-        val num = if (darkMode) "#888E98" else "#6B6B6B"
+        val bg = when (theme) {
+            "light" -> "#F5F5F5"
+            "sepia" -> "#F5E6D3"
+            else -> "#181818"
+        }
+        val panel = when (theme) {
+            "light" -> "#E8E8E8"
+            "sepia" -> "#E6D5B8"
+            else -> "#23262C"
+        }
+        val text = when (theme) {
+            "light" -> "#1A1A1A"
+            "sepia" -> "#4A3A28"
+            else -> "#E0E0E0"
+        }
+        val num = when (theme) {
+            "light" -> "#6B6B6B"
+            "sepia" -> "#6B5B4B"
+            else -> "#888E98"
+        }
         // tab strip + its scroll container (fixes the dark corner in light mode)
         val strip = findViewById<android.widget.LinearLayout>(R.id.tabStrip)
         strip.setBackgroundColor(Color.parseColor(panel))
@@ -312,15 +420,18 @@ class MainActivity : AppCompatActivity() {
         status.setTextColor(Color.parseColor(num))
         // system status bar: color + icon contrast
         window.statusBarColor = Color.parseColor(panel)
+        val lightStatus = theme == "light" || theme == "sepia"
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             window.insetsController?.setSystemBarsAppearance(
-                if (darkMode) 0 else android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                if (lightStatus) android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
             )
         } else {
             @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = if (darkMode) 0 else android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            window.decorView.systemUiVisibility = if (lightStatus) android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else 0
         }
+        // persist
+        getSharedPreferences("ironpad", Context.MODE_PRIVATE).edit().putString("theme", theme).apply()
     }
 
     private fun updateLineNumbers() {
