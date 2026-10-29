@@ -225,6 +225,8 @@ class MainActivity : AppCompatActivity() {
         page.canvas.drawRect(0f, 0f, w, h, bgPaint)
         return page
     }
+
+    private fun showFindReplace() {
         val findInput = EditText(this).apply { hint = "Find"; setSingleLine(true) }
         val replaceInput = EditText(this).apply { hint = "Replace"; setSingleLine(true) }
         val layout = LinearLayout(this).apply {
