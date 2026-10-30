@@ -73,6 +73,37 @@ impl Tab {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Theme {
+    Dark,
+    Light,
+    Sepia,
+}
+
+impl Theme {
+    fn name(self) -> &'static str {
+        match self {
+            Theme::Dark => "Dark",
+            Theme::Light => "Light",
+            Theme::Sepia => "Sepia",
+        }
+    }
+    fn editor_colors(self) -> (u32, u32) {
+        match self {
+            Theme::Dark => (0x0018_1818, 0x00E0_E0E0),
+            Theme::Light => (0x00F5_F5F5, 0x001A_1A1A),
+            Theme::Sepia => (0x00D3_E6F5, 0x0028_3A4A),
+        }
+    }
+    fn panel_colors(self) -> (u32, u32, u32, u32) {
+        match self {
+            Theme::Dark => (0x23, 0x26, 0x2c, 0x1b),
+            Theme::Light => (0xE8, 0xE8, 0xE8, 0xF5),
+            Theme::Sepia => (0xE6, 0xD5, 0xB8, 0xF5),
+        }
+    }
+}
+
 enum TabAction {
     Switch(usize),
     Close(usize),
@@ -98,6 +129,7 @@ struct IronPad {
     find_needle: String,
     find_replacement: String,
     find_index: usize,
+    theme: Theme,
 }
 
 impl IronPad {
@@ -110,6 +142,7 @@ impl IronPad {
             let ts = ThemeSet::load_defaults();
             let _ = tx.send((ps, ts));
         });
+        let theme = load_theme();
         Self {
             tabs: Vec::new(),
             active: 0,
@@ -127,6 +160,7 @@ impl IronPad {
             find_needle: String::new(),
             find_replacement: String::new(),
             find_index: 0,
+            theme,
         }
     }
 
@@ -574,17 +608,15 @@ fn shortcut(ctx: &egui::Context, mods: egui::Modifiers, key: egui::Key) -> bool 
 
 impl eframe::App for IronPad {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // eframe applies the system theme after App::new, so force dark on frame 1.
-        if !self.themed {
-            ctx.set_theme(egui::ThemePreference::Dark);
-            // Give panels (toolbar, tabs) a distinct fill so the chrome reads
-            // separately from the editor surface.
-            ctx.style_mut(|st| {
-                st.visuals.panel_fill = egui::Color32::from_rgb(0x23, 0x26, 0x2c);
-                st.visuals.window_fill = egui::Color32::from_rgb(0x1b, 0x1d, 0x22);
-            });
-            ctx.request_repaint();
-            self.themed = true;
+        // Apply theme to egui chrome and native editor.
+        let (p_r, p_g, p_b, w_r) = self.theme.panel_colors();
+        ctx.style_mut(|st| {
+            st.visuals.panel_fill = egui::Color32::from_rgb(p_r as u8, p_g as u8, p_b as u8);
+            st.visuals.window_fill = egui::Color32::from_rgb(w_r as u8, p_g as u8, p_b as u8);
+        });
+        if let Some(edit) = self.edit.as_ref() {
+            let (bg, fg) = self.theme.editor_colors();
+            edit.set_colors(bg, fg);
         }
         // eframe does not expose the HWND in 0.31, so look it up ourselves.
         if self.parent_hwnd.is_none() {
@@ -670,6 +702,15 @@ impl eframe::App for IronPad {
                 }
                 if ui.button("Export PDF").clicked() {
                     self.export_pdf();
+                }
+                ui.separator();
+                ui.label("Theme:");
+                for t in [Theme::Dark, Theme::Light, Theme::Sepia] {
+                    let active = self.theme == t;
+                    if ui.selectable_label(active, t.name()).clicked() {
+                        self.theme = t;
+                        save_theme(t);
+                    }
                 }
                 ui.separator();
                 if ui.button("Quit").clicked() {
@@ -949,5 +990,31 @@ impl eframe::App for IronPad {
             self.last_title = title.clone();
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
         }
+    }
+}
+
+/// Config file next to the exe: stores the chosen theme.
+fn config_path() -> std::io::Result<PathBuf> {
+    let exe = std::env::current_exe()?;
+    Ok(exe.with_file_name("config.json"))
+}
+
+fn load_theme() -> Theme {
+    match config_path() {
+        Ok(p) => match std::fs::read_to_string(&p) {
+            Ok(s) => match s.trim() {
+                "Light" => Theme::Light,
+                "Sepia" => Theme::Sepia,
+                _ => Theme::Dark,
+            },
+            Err(_) => Theme::Dark,
+        },
+        Err(_) => Theme::Dark,
+    }
+}
+
+fn save_theme(t: Theme) {
+    if let Ok(p) = config_path() {
+        let _ = std::fs::write(&p, t.name());
     }
 }
