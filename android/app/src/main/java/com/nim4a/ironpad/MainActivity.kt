@@ -315,19 +315,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun rebuildTabs() {
         tabStrip.removeAllViews()
+        val txtActive = if (theme == "dark") Color.WHITE else Color.parseColor(if (theme == "sepia") "#4A3A28" else "#1A1A1A")
+        val txtInactive = Color.parseColor(if (theme == "dark") "#AAB0BA" else "#6B5B4B")
+        val tabActive = Color.parseColor(when (theme) {
+            "light" -> "#D0D0D0"; "sepia" -> "#D8C4A0"; else -> "#353A44"
+        })
+        val tabInactive = Color.parseColor(when (theme) {
+            "light" -> "#F0F0F0"; "sepia" -> "#EFE2CC"; else -> "#1B1D22"
+        })
+        val muted = Color.parseColor(if (theme == "dark") "#888E98" else "#6B6B6B")
         for (i in tabs.indices) {
             val chip = TextView(this).apply {
                 text = tabs[i]
-                setTextColor(if (i == active) (if (darkMode) Color.WHITE else Color.parseColor("#1A1A1A")) else Color.parseColor(if (darkMode) "#AAB0BA" else "#555555"))
+                setTextColor(if (i == active) txtActive else txtInactive)
                 textSize = 13f
                 setPadding(24, 12, 24, 12)
-                setBackgroundColor(if (i == active) Color.parseColor(if (darkMode) "#353A44" else "#D0D0D0") else Color.parseColor(if (darkMode) "#1B1D22" else "#F0F0F0"))
+                setBackgroundColor(if (i == active) tabActive else tabInactive)
                 setOnClickListener { switchTab(i) }
             }
             tabStrip.addView(chip)
             val close = TextView(this).apply {
                 text = "  \u00D7"
-                setTextColor(Color.parseColor(if (darkMode) "#888E98" else "#6B6B6B"))
+                setTextColor(muted)
                 textSize = 13f
                 setPadding(4, 12, 12, 12)
                 setOnClickListener { closeTab(i) }
@@ -336,18 +345,29 @@ class MainActivity : AppCompatActivity() {
         }
         val plus = TextView(this).apply {
             text = "  +  "
-            setTextColor(Color.parseColor(if (darkMode) "#AAB0BA" else "#555555"))
+            setTextColor(txtInactive)
             textSize = 16f
             setPadding(16, 12, 16, 12)
             setOnClickListener { newTab() }
         }
         tabStrip.addView(plus)
         val themeBtn = TextView(this).apply {
-            text = if (darkMode) "  ☀  " else "  ☾  "
-            setTextColor(Color.parseColor(if (darkMode) "#AAB0BA" else "#555555"))
+            text = when (theme) {
+                "dark" -> "  ☀  "   // switch to light
+                "light" -> "  📖  " // switch to sepia
+                else -> "  ☾  "     // switch to dark
+            }
+            setTextColor(txtInactive)
             textSize = 16f
             setPadding(16, 12, 16, 12)
-            setOnClickListener { darkMode = !darkMode; applyTheme(); rebuildTabs() }
+            setOnClickListener {
+                theme = when (theme) {
+                    "dark" -> "light"
+                    "light" -> "sepia"
+                    else -> "dark"
+                }
+                applyTheme()
+            }
         }
         tabStrip.addView(themeBtn)
     }

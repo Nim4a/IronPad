@@ -458,7 +458,8 @@ impl Edit {
         CURRENT_BG.store(bg, Ordering::Relaxed);
         CURRENT_FG.store(fg, Ordering::Relaxed);
         unsafe {
-            SendMessageW(self.hwnd, EM_SETBKGNDCOLOR, bg as usize, 0);
+            // EM_SETBKGNDCOLOR: wParam=0 (use lParam color), lParam=COLORREF.
+            SendMessageW(self.hwnd, EM_SETBKGNDCOLOR, 0, bg as LPARAM);
             let dflt = CharFormat {
                 dw_mask: CFM_COLOR | CFM_BACKCOLOR,
                 cr_text_color: fg,
@@ -471,13 +472,25 @@ impl Edit {
                 SCF_DEFAULT,
                 &dflt as *const CharFormat as LPARAM,
             );
-            // Recreate the background brush used by WM_CTLCOLOREDIT.
+            // Recreate the background brush used by WM_ERASEBKGND / WM_CTLCOLOREDIT.
             let brush = CreateSolidBrush(bg);
             let old = DARK_BRUSH.swap(brush as *mut c_void, Ordering::Relaxed);
             if !old.is_null() {
-                let _ = windows_sys::Win32::Graphics::Gdi::DeleteObject(old);
+                DeleteObject(old);
             }
+            // The class brush paints the area outside the text extent.
+            SetClassLongPtrW(self.hwnd, -10, brush as isize); // GCLP_HBRBACKGROUND
+            // COLOR_WINDOW is global; point it at the new bg too.
+            let idx = [5i32];
+            let sys = [bg];
+            SetSysColors(1, idx.as_ptr(), sys.as_ptr());
             InvalidateRect(self.hwnd, std::ptr::null(), 1);
+            RedrawWindow(
+                self.hwnd,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                0x0001 | 0x0004 | 0x0400,
+            );
             UpdateWindow(self.hwnd);
         }
     }

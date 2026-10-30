@@ -102,6 +102,60 @@ impl Theme {
             Theme::Sepia => (0xE6, 0xD5, 0xB8, 0xF5),
         }
     }
+    fn is_dark(self) -> bool {
+        self == Theme::Dark
+    }
+    /// (active_tab_fill, inactive_tab_fill, active_text, inactive_text, muted)
+    fn tab_colors(self) -> (egui::Color32, egui::Color32, egui::Color32, egui::Color32, egui::Color32) {
+        match self {
+            Theme::Dark => (
+                egui::Color32::from_rgb(0x35, 0x3a, 0x44),
+                egui::Color32::from_rgb(0x1b, 0x1d, 0x22),
+                egui::Color32::WHITE,
+                egui::Color32::from_rgb(0xaa, 0xb0, 0xba),
+                egui::Color32::from_rgb(0x88, 0x8e, 0x98),
+            ),
+            Theme::Light => (
+                egui::Color32::from_rgb(0xd0, 0xd0, 0xd0),
+                egui::Color32::from_rgb(0xf0, 0xf0, 0xf0),
+                egui::Color32::from_rgb(0x1a, 0x1a, 0x1a),
+                egui::Color32::from_rgb(0x55, 0x55, 0x55),
+                egui::Color32::from_rgb(0x6b, 0x6b, 0x6b),
+            ),
+            Theme::Sepia => (
+                egui::Color32::from_rgb(0xd8, 0xc4, 0xa0),
+                egui::Color32::from_rgb(0xef, 0xe2, 0xcc),
+                egui::Color32::from_rgb(0x4a, 0x3a, 0x28),
+                egui::Color32::from_rgb(0x6b, 0x5b, 0x4b),
+                egui::Color32::from_rgb(0x6b, 0x5b, 0x4b),
+            ),
+        }
+    }
+    /// gutter background + line-number color
+    fn gutter_colors(self) -> (egui::Color32, egui::Color32) {
+        match self {
+            Theme::Dark => (
+                egui::Color32::from_rgb(0x23, 0x26, 0x2c),
+                egui::Color32::from_rgb(0x88, 0x8e, 0x98),
+            ),
+            Theme::Light => (
+                egui::Color32::from_rgb(0xe8, 0xe8, 0xe8),
+                egui::Color32::from_rgb(0x6b, 0x6b, 0x6b),
+            ),
+            Theme::Sepia => (
+                egui::Color32::from_rgb(0xe6, 0xd5, 0xb8),
+                egui::Color32::from_rgb(0x6b, 0x5b, 0x4b),
+            ),
+        }
+    }
+    /// egui text color (labels, tab labels)
+    fn text_color(self) -> egui::Color32 {
+        match self {
+            Theme::Dark => egui::Color32::from_rgb(0xE0, 0xE0, 0xE0),
+            Theme::Light => egui::Color32::from_rgb(0x1A, 0x1A, 0x1A),
+            Theme::Sepia => egui::Color32::from_rgb(0x4A, 0x3A, 0x28),
+        }
+    }
 }
 
 enum TabAction {
@@ -130,6 +184,8 @@ struct IronPad {
     find_replacement: String,
     find_index: usize,
     theme: Theme,
+    /// Theme already applied to the native editor (avoid per-frame work).
+    applied_theme: Option<Theme>,
 }
 
 impl IronPad {
@@ -161,6 +217,7 @@ impl IronPad {
             find_replacement: String::new(),
             find_index: 0,
             theme,
+            applied_theme: None,
         }
     }
 
@@ -614,9 +671,12 @@ impl eframe::App for IronPad {
             st.visuals.panel_fill = egui::Color32::from_rgb(p_r as u8, p_g as u8, p_b as u8);
             st.visuals.window_fill = egui::Color32::from_rgb(w_r as u8, p_g as u8, p_b as u8);
         });
-        if let Some(edit) = self.edit.as_ref() {
-            let (bg, fg) = self.theme.editor_colors();
-            edit.set_colors(bg, fg);
+        if self.applied_theme != Some(self.theme) {
+            if let Some(edit) = self.edit.as_ref() {
+                let (bg, fg) = self.theme.editor_colors();
+                edit.set_colors(bg, fg);
+            }
+            self.applied_theme = Some(self.theme);
         }
         // eframe does not expose the HWND in 0.31, so look it up ourselves.
         if self.parent_hwnd.is_none() {
@@ -729,30 +789,31 @@ impl eframe::App for IronPad {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.add_space(4.0);
+                let (tab_active, tab_inactive, txt_active, txt_inactive, muted) = self.theme.tab_colors();
                 for (i, label) in labels.iter().enumerate() {
                     let active_tab = i == active;
                     let galley = ui.painter().layout_no_wrap(
                         label.clone(),
                         egui::TextStyle::Body.resolve(ui.style()),
-                        egui::Color32::WHITE,
+                        txt_active,
                     );
                     let (rect, resp) = ui.allocate_exact_size(
                         egui::vec2(galley.mesh_bounds.width() + 34.0, 26.0),
                         egui::Sense::click(),
                     );
                     let fill = if active_tab {
-                        egui::Color32::from_rgb(0x35, 0x3a, 0x44)
+                        tab_active
                     } else {
-                        egui::Color32::from_rgb(0x1b, 0x1d, 0x22)
+                        tab_inactive
                     };
                     ui.painter().rect_filled(rect, 4.0, fill);
                     ui.painter().galley(
                         rect.left_center() + egui::vec2(8.0, -galley.size().y / 2.0),
                         galley,
                         if active_tab {
-                            egui::Color32::WHITE
+                            txt_active
                         } else {
-                            egui::Color32::from_rgb(0xaa, 0xb0, 0xba)
+                            txt_inactive
                         },
                     );
                     // close x
@@ -762,7 +823,7 @@ impl eframe::App for IronPad {
                         egui::Align2::CENTER_CENTER,
                         "x",
                         egui::TextStyle::Body.resolve(ui.style()),
-                        egui::Color32::from_rgb(0x88, 0x8e, 0x98),
+                        muted,
                     );
                     if resp.clicked() {
                         // click on right 20px closes, otherwise switches
@@ -866,12 +927,13 @@ impl eframe::App for IronPad {
                 if let Some(edit) = self.edit.as_ref() {
                     let total = edit.line_count();
                     if total > 0 {
+                        let (gutter_bg, gutter_fg) = self.theme.gutter_colors();
                         let font = egui::TextStyle::Monospace.resolve(ui.style());
                         let digits = total.to_string().len();
                         let sample = ui.painter().layout_no_wrap(
                             "8".repeat(digits),
                             font.clone(),
-                            egui::Color32::WHITE,
+                            gutter_fg,
                         );
                         gutter_w = sample.size().x + 16.0;
                         let area = ui.max_rect();
@@ -881,7 +943,7 @@ impl eframe::App for IronPad {
                                 egui::vec2(gutter_w, area.height()),
                             ),
                             0.0,
-                            egui::Color32::from_rgb(0x23, 0x26, 0x2c),
+                            gutter_bg,
                         );
                         let first = edit.first_visible_line();
                         for line in first..total {
@@ -898,7 +960,7 @@ impl eframe::App for IronPad {
                                 egui::Align2::RIGHT_TOP,
                                 (line + 1).to_string(),
                                 font.clone(),
-                                egui::Color32::from_rgb(0x88, 0x8e, 0x98),
+                                gutter_fg,
                             );
                         }
                     }
