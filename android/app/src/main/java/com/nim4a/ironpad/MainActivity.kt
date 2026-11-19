@@ -32,6 +32,8 @@ class MainActivity : AppCompatActivity() {
     private var currentUri: Uri? = null
     private var findLastIndex = 0
     private var theme = "dark" // dark | light | sepia
+    private var wrap = true
+    private var fontSp = 14f
 
     private val openLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let { readUri(it) }
@@ -48,6 +50,8 @@ class MainActivity : AppCompatActivity() {
         // load persisted theme
         val prefs = getSharedPreferences("ironpad", Context.MODE_PRIVATE)
         theme = prefs.getString("theme", "dark")!!
+        wrap = prefs.getBoolean("wrap", true)
+        fontSp = prefs.getFloat("font", 14f)
         setContentView(R.layout.activity_main)
         editor = findViewById(R.id.editor)
         lineNumbers = findViewById(R.id.lineNumbers)
@@ -75,15 +79,20 @@ class MainActivity : AppCompatActivity() {
 
         rebuildTabs()
         applyTheme()
+        applyEditorPrefs()
         updateLineNumbers()
         updateStatus()
     }
 
     override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
-        val tint = Color.parseColor(if (darkMode) "#E0E0E0" else "#1A1A1A")
+        val tint = Color.parseColor(if (theme == "dark") "#E0E0E0" else "#1A1A1A")
         for (i in 0 until menu.size()) {
             menu.getItem(i).icon?.setTint(tint)
+        }
+        menu.findItem(R.id.action_wrap)?.apply {
+            isCheckable = true
+            isChecked = wrap
         }
         return true
     }
@@ -99,6 +108,21 @@ class MainActivity : AppCompatActivity() {
             R.id.action_find -> { showFindReplace(); true }
             R.id.action_theme -> { showThemeSelector(); true }
             R.id.action_export_pdf -> { pdfLauncher.launch("IronPad.pdf"); true }
+            R.id.action_wrap -> {
+                wrap = !wrap
+                applyEditorPrefs()
+                true
+            }
+            R.id.action_font_up -> {
+                if (fontSp < 32f) fontSp += 1f
+                applyEditorPrefs()
+                true
+            }
+            R.id.action_font_down -> {
+                if (fontSp > 8f) fontSp -= 1f
+                applyEditorPrefs()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -405,6 +429,18 @@ class MainActivity : AppCompatActivity() {
         texts.putAll(remapped)
         editor.setText(texts[active] ?: "")
         rebuildTabs()
+    }
+
+    private fun applyEditorPrefs() {
+        editor.setHorizontallyScrolling(!wrap)
+        editor.textSize = fontSp
+        lineNumbers.textSize = fontSp
+        getSharedPreferences("ironpad", Context.MODE_PRIVATE).edit()
+            .putBoolean("wrap", wrap)
+            .putFloat("font", fontSp)
+            .apply()
+        invalidateOptionsMenu()
+        updateLineNumbers()
     }
 
     private fun applyTheme() {

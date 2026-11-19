@@ -186,6 +186,10 @@ struct IronPad {
     theme: Theme,
     /// Theme already applied to the native editor (avoid per-frame work).
     applied_theme: Option<Theme>,
+    wrap: bool,
+    applied_wrap: Option<bool>,
+    font_pt: i32,
+    applied_font: Option<i32>,
 }
 
 impl IronPad {
@@ -198,7 +202,7 @@ impl IronPad {
             let ts = ThemeSet::load_defaults();
             let _ = tx.send((ps, ts));
         });
-        let theme = load_theme();
+        let (theme, wrap, font_pt) = load_prefs();
         Self {
             tabs: Vec::new(),
             active: 0,
@@ -218,6 +222,10 @@ impl IronPad {
             find_index: 0,
             theme,
             applied_theme: None,
+            wrap,
+            applied_wrap: None,
+            font_pt,
+            applied_font: None,
         }
     }
 
@@ -671,12 +679,20 @@ impl eframe::App for IronPad {
             st.visuals.panel_fill = egui::Color32::from_rgb(p_r as u8, p_g as u8, p_b as u8);
             st.visuals.window_fill = egui::Color32::from_rgb(w_r as u8, p_g as u8, p_b as u8);
         });
-        if self.applied_theme != Some(self.theme) {
-            if let Some(edit) = self.edit.as_ref() {
+        if let Some(edit) = self.edit.as_ref() {
+            if self.applied_theme != Some(self.theme) {
                 let (bg, fg) = self.theme.editor_colors();
                 edit.set_colors(bg, fg);
+                self.applied_theme = Some(self.theme);
             }
-            self.applied_theme = Some(self.theme);
+            if self.applied_wrap != Some(self.wrap) {
+                edit.set_wrap(self.wrap);
+                self.applied_wrap = Some(self.wrap);
+            }
+            if self.applied_font != Some(self.font_pt) {
+                edit.set_font_size(self.font_pt);
+                self.applied_font = Some(self.font_pt);
+            }
         }
         // eframe does not expose the HWND in 0.31, so look it up ourselves.
         if self.parent_hwnd.is_none() {
@@ -769,8 +785,21 @@ impl eframe::App for IronPad {
                     let active = self.theme == t;
                     if ui.selectable_label(active, t.name()).clicked() {
                         self.theme = t;
-                        save_theme(t);
+                        save_prefs(self.theme, self.wrap, self.font_pt);
                     }
+                }
+                ui.separator();
+                if ui.selectable_label(self.wrap, "Wrap").clicked() {
+                    self.wrap = !self.wrap;
+                    save_prefs(self.theme, self.wrap, self.font_pt);
+                }
+                if ui.button("A-").clicked() && self.font_pt > 8 {
+                    self.font_pt -= 1;
+                    save_prefs(self.theme, self.wrap, self.font_pt);
+                }
+                if ui.button("A+").clicked() && self.font_pt < 40 {
+                    self.font_pt += 1;
+                    save_prefs(self.theme, self.wrap, self.font_pt);
                 }
                 ui.separator();
                 if ui.button("Quit").clicked() {
@@ -1061,22 +1090,31 @@ fn config_path() -> std::io::Result<PathBuf> {
     Ok(exe.with_file_name("config.json"))
 }
 
-fn load_theme() -> Theme {
-    match config_path() {
-        Ok(p) => match std::fs::read_to_string(&p) {
-            Ok(s) => match s.trim() {
-                "Light" => Theme::Light,
-                "Sepia" => Theme::Sepia,
+fn load_prefs() -> (Theme, bool, i32) {
+    let mut theme = Theme::Dark;
+    let mut wrap = false;
+    let mut font_pt = 16;
+    if let Ok(p) = config_path() {
+        if let Ok(s) = std::fs::read_to_string(&p) {
+            let mut lines = s.lines();
+            theme = match lines.next().map(|l| l.trim()) {
+                Some("Light") => Theme::Light,
+                Some("Sepia") => Theme::Sepia,
                 _ => Theme::Dark,
-            },
-            Err(_) => Theme::Dark,
-        },
-        Err(_) => Theme::Dark,
+            };
+            wrap = lines.next().map(|l| l.trim() == "1").unwrap_or(false);
+            font_pt = lines
+                .next()
+                .and_then(|l| l.trim().parse::<i32>().ok())
+                .filter(|v| (8..=40).contains(v))
+                .unwrap_or(16);
+        }
     }
+    (theme, wrap, font_pt)
 }
 
-fn save_theme(t: Theme) {
+fn save_prefs(theme: Theme, wrap: bool, font_pt: i32) {
     if let Ok(p) = config_path() {
-        let _ = std::fs::write(&p, t.name());
+        let _ = std::fs::write(&p, format!("{}\n{}\n{}\n", theme.name(), wrap as u8, font_pt));
     }
 }

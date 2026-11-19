@@ -69,9 +69,11 @@ const EM_POSFROMCHAR: u32 = 0x0436; // WM_USER + 54 (Rich Edit form: POINTL out)
 const EM_LINEINDEX: u32 = 0x00BB;
 const EM_GETFIRSTVISIBLELINE: u32 = 0x00CE;
 const EM_GETLINECOUNT: u32 = 0x00BA;
+const EM_SETTARGETDEVICE: u32 = 0x0448; // WM_USER + 72
 
 const CFM_COLOR: u32 = 0x4000_0000;
 const CFM_BACKCOLOR: u32 = 0x0400_0000;
+const CFM_SIZE: u32 = 0x8000_0000;
 const SCF_DEFAULT: usize = 0x0000;
 const SCF_SELECTION: usize = 0x0001;
 const WB_WRAP: usize = 0;
@@ -491,6 +493,59 @@ impl Edit {
                 std::ptr::null_mut(),
                 0x0001 | 0x0004 | 0x0400,
             );
+            UpdateWindow(self.hwnd);
+        }
+    }
+
+    /// Toggle word wrap. lParam=0 wraps to the window; nonzero disables wrap.
+    pub fn set_wrap(&self, wrap: bool) {
+        unsafe {
+            SendMessageW(
+                self.hwnd,
+                EM_SETTARGETDEVICE,
+                0,
+                if wrap { 0 } else { 1_000_000 },
+            );
+            InvalidateRect(self.hwnd, std::ptr::null(), 1);
+            UpdateWindow(self.hwnd);
+        }
+    }
+
+    /// Change the editor font size (points).
+    pub fn set_font_size(&self, pt: i32) {
+        unsafe {
+            let dpi = GetDpiForWindow(self.hwnd).max(96);
+            let height = -((pt * dpi as i32) / 72);
+            let face: Vec<u16> = "Consolas\0".encode_utf16().collect();
+            let font = CreateFontW(
+                height,
+                0,
+                0,
+                0,
+                400,
+                0,
+                0,
+                0,
+                DEFAULT_CHARSET as u32,
+                OUT_TT_PRECIS as u32,
+                CLIP_DEFAULT_PRECIS as u32,
+                CLEARTYPE_QUALITY as u32,
+                FIXED_PITCH as u32 | FF_DONTCARE as u32,
+                face.as_ptr(),
+            );
+            SendMessageW(self.hwnd, WM_SETFONT, font as usize as WPARAM, 1);
+            let fmt = CharFormat {
+                dw_mask: CFM_SIZE,
+                y_height: pt * 20, // twips
+                ..Default::default()
+            };
+            SendMessageW(
+                self.hwnd,
+                EM_SETCHARFORMAT,
+                SCF_DEFAULT,
+                &fmt as *const CharFormat as LPARAM,
+            );
+            InvalidateRect(self.hwnd, std::ptr::null(), 1);
             UpdateWindow(self.hwnd);
         }
     }
