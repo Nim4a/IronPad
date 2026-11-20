@@ -2,6 +2,8 @@
 !define APPNAME "IronPad"
 Name "${APPNAME}"
 OutFile "..\IronPad-Setup.exe"
+Icon "..\assets\icon.ico"
+UninstallIcon "..\assets\icon.ico"
 InstallDir "$LOCALAPPDATA\Programs\IronPad"
 RequestExecutionLevel user
 Page Directory
