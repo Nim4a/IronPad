@@ -183,6 +183,7 @@ class MainActivity : AppCompatActivity() {
                     else -> "dark"
                 }
                 applyTheme()
+                rebuildTabs()
             }
             .setPositiveButton("OK") { _, _ -> }
             .create()
@@ -391,6 +392,7 @@ class MainActivity : AppCompatActivity() {
                     else -> "dark"
                 }
                 applyTheme()
+                rebuildTabs()
             }
         }
         tabStrip.addView(themeBtn)
